@@ -416,14 +416,16 @@ export function createStrategy(p: Params): Bot {
         }
       }
 
-      // Probes flip fast: a probe held 10 slots exits whatever the price.
+      // Probes flip fast: a probe held 10 slots exits whatever the price, and
+      // one up 5% banks the gain at once instead of waiting out the 10 slots.
       for (const h of held.values()) {
         if (!h.probe || soldThisBatch.has(h.mint)) continue;
-        if (now - h.buySlot >= 10 && orders.length < cap) {
-          const price = priceOf(state, h.mint);
-          if (price !== null && h.tokens > 0n) {
-            orders.push({ side: 'sell', mint: h.mint, token_amount: h.tokens, max_slippage_bps: 500 });
-          }
+        const price = priceOf(state, h.mint);
+        if (price === null || h.tokens === 0n || h.costLamports === 0n) continue;
+        const valueLamports = BigInt(Math.floor(Number(h.tokens) * price));
+        const pnlBps = Number(((valueLamports - h.costLamports) * 10000n) / h.costLamports);
+        if ((now - h.buySlot >= 10 || pnlBps >= 500) && orders.length < cap) {
+          orders.push({ side: 'sell', mint: h.mint, token_amount: h.tokens, max_slippage_bps: 500 });
         }
       }
 
